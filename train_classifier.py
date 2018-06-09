@@ -50,7 +50,7 @@ data_transforms = {
     ]),
 
     'val': transforms.Compose([
-        transforms.Resize(224),
+        transforms.Resize((224,224)),
         transforms.ToTensor(),
         transforms.Normalize(mean, std)
     ]),
@@ -64,14 +64,14 @@ valid_dataset =  datasets.ImageFolder(data_dir, data_transforms['val'])
 
 #Set the validation split 
 valid_size = 0.2
-random_seed = 5  #for reproducibility 
+# random_seed = 5  #for reproducibility 
 
 
 num_train = len(train_dataset)
 indices = list(range(num_train))
 split = int(np.floor(valid_size * num_train))
 
-np.random.seed(random_seed)
+# np.random.seed(random_seed)
 np.random.shuffle(indices)
 
 train_idx, valid_idx = indices[split:], indices[:split]
@@ -120,7 +120,7 @@ out = torchvision.utils.make_grid(inputs)
 
 dataloaders = {"train": train_loader, "val": valid_loader}
 
-dataset_sizes = {"train": split, "val": len(train_dataset) - split }
+dataset_sizes = {"train": len(train_dataset) - split, "val": split }
 
 
 def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
@@ -145,10 +145,9 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
             running_corrects = 0
 
             # Iterate over data.
-            for inputs, labels in dataloaders[phase]:
-                print("At work")
-#                inputs = inputs.to(device)
-#                labels = labels.to(device)
+            for inputs, labels in dataloaders[phase]:                
+                inputs = inputs.to(device)
+                labels = labels.to(device)
 
                 # zero the parameter gradients
                 optimizer.zero_grad()
@@ -156,7 +155,8 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                 # forward
                 # track history if only in train
                 with torch.set_grad_enabled(phase == 'train'):
-                    outputs = model(inputs)
+                    outputs = model(inputs).squeeze()
+                    print(outputs.shape)
                     _, preds = torch.max(outputs, 1)
                     loss = criterion(outputs, labels)
 
@@ -199,7 +199,6 @@ def visualize_model(model, num_images=6):
 
     with torch.no_grad():
         for i, (inputs, labels) in enumerate(dataloaders['val']):
-            print("Working")
             inputs = inputs.to(device)
             labels = labels.to(device)
 
@@ -219,19 +218,31 @@ def visualize_model(model, num_images=6):
         model.train(mode=was_training)
         
 model_ft = models.resnet18(pretrained=True)
-num_ftrs = model_ft.fc.in_features
 
-#model_ft = model_ft.to(device)
+    
+    
+num_ftrs = model_ft.fc.in_features
+model_ft.fc = nn.Conv2d(512, 11, 1)
+
+
+modified_model_ft = nn.Sequential(*list(model_ft.children())[:-1])
+modified_model_ft.add_module("Final",nn.Conv2d(512, 11, 1))
+
+model_ft = modified_model_ft
+
+model_ft = model_ft.to(device)
+
+
 
 criterion = nn.CrossEntropyLoss()
 
-optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.001, momentum=0.9)
+optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.001, momentum=0.9, weight_decay = 0.0005)
 
 exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
 
-model_ft = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler,
-                       num_epochs=25)
 
+model_ft = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler,
+                       num_epochs=5)
 
 
 
