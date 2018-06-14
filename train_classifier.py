@@ -44,13 +44,13 @@ data_transforms = {
         transforms.RandomHorizontalFlip(0.4),
         torchvision.transforms.RandomApply([hsv], 0.25),
         torchvision.transforms.RandomApply([affine], 0.3),
-        transforms.Resize((224,224)),
+        transforms.Resize((112,112)),
         transforms.ToTensor(),
         transforms.Normalize(mean, std)
     ]),
 
     'val': transforms.Compose([
-        transforms.Resize((224,224)),
+        transforms.Resize((112,112)),
         transforms.ToTensor(),
         transforms.Normalize(mean, std)
     ]),
@@ -81,7 +81,7 @@ valid_sampler = SubsetRandomSampler(valid_idx)
 
 #Set the parameters 
 
-batch_size = 5
+batch_size = 32
 num_workers= 4
 pin_memory = True
 
@@ -141,10 +141,11 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
             else:
                 model.eval()   # Set model to evaluate mode
 
-            running_loss = 0.0
+            running_loss = 0.
             running_corrects = 0
 
             # Iterate over data.
+            i = 0
             for inputs, labels in dataloaders[phase]:                
                 inputs = inputs.to(device)
                 labels = labels.to(device)
@@ -157,6 +158,10 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                 with torch.set_grad_enabled(phase == 'train'):
                     outputs = model(inputs).squeeze()
                     _, preds = torch.max(outputs, 1)
+                    
+                    
+                    print(outputs.shape)
+                    
                     loss = criterion(outputs, labels)
 
                     # backward + optimize only if in training phase
@@ -165,8 +170,11 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                         optimizer.step()
 
                 # statistics
+
                 running_loss += loss.item() * inputs.size(0)
                 running_corrects += torch.sum(preds == labels.data)
+                i += batch_size
+
 
             epoch_loss = running_loss / dataset_sizes[phase]
             epoch_acc = running_corrects.double() / dataset_sizes[phase]
@@ -202,8 +210,9 @@ def visualize_model(model, num_images=6):
             labels = labels.to(device)
 
             outputs = model(inputs)
-            _, preds = torch.max(outputs, 1)
 
+            _, preds = torch.max(outputs, 1)
+            
             for j in range(inputs.size()[0]):
                 images_so_far += 1
                 ax = plt.subplot(num_images//2, 2, images_so_far)
@@ -216,16 +225,19 @@ def visualize_model(model, num_images=6):
                     return
         model.train(mode=was_training)
         
-model_ft = models.resnet18(pretrained=True)
+model_ft = models.vgg11(pretrained=True)
 
     
     
-num_ftrs = model_ft.fc.in_features
-model_ft.fc = nn.Conv2d(512, 11, 1)
+arch = "vgg"
 
+if arch == "res":    
+    modified_model_ft = nn.Sequential(*list(model_ft.children())[:-1])
+else:
+    modified_model_ft = nn.Sequential(*list(model_ft.features.children())[:-1])
+    
 
-modified_model_ft = nn.Sequential(*list(model_ft.children())[:-1])
-modified_model_ft.add_module("Final",nn.Conv2d(512, 11, 1))
+modified_model_ft.add_module("Final",nn.Conv2d(512, 11, 7))
 
 model_ft = modified_model_ft
 
@@ -239,9 +251,19 @@ optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.001, momentum=0.9, weight_d
 
 exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
 
+#
+#model_ft.load_state_dict(torch.load("Saved/Model_cpu.pth"))
+#
+#torch.save(model_ft, "Saved/Whole_Model.pth")
 
 model_ft = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler,
                        num_epochs=5)
+
+#torch.save(model_ft, open("Model.pth", "wb"))
+
+
+visualize_model(model_ft)
+
 
 
 

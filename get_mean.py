@@ -9,6 +9,7 @@ Created on Fri Jun  8 14:54:20 2018
 import cv2
 import numpy as np
 import pickle as pkl
+import os
 
 
 def get_mean():
@@ -26,7 +27,8 @@ def get_mean():
     for class_dir in classes_dir:
         im_path = [os.path.join(class_dir, x) for x in os.listdir(class_dir)]
         li.extend(im_path)
-        
+    
+    li = [x for x in li if x[-4:] == ".jpg"]
     
     mean = np.array([0.0,0.0,0.0])
     
